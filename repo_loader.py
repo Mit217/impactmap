@@ -88,7 +88,7 @@ def resolve_relative(node, current, is_package):
 def build_dependencies(files):
     """Return (modules, deps) where deps is a set of (importer, imported)."""
     modules = {path_to_module(p): p for p in files if path_to_module(p)}
-    deps = set()
+    deps = {}
 
     for path, code in files.items():
         me = path_to_module(path)
@@ -119,10 +119,46 @@ def build_dependencies(files):
             for c in candidates:
                 target = resolve_to_module(c, modules)
                 if target and target != me:
-                    deps.add((me, target))
-
+                    key = (me, target)
+                    if key not in deps or node.lineno < deps[key]:
+                        deps[key] = node.lineno
     return modules, deps
 
+def _collect(body, prefix, module, path, out):
+    for node in body:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            if isinstance(node, ast.ClassDef):
+                kind = "class"
+            else:
+                kind = "method" if prefix else "function"
+            qual = f"{prefix}{node.name}"
+            out.append(
+                {
+                    "name": node.name,
+                    "qualname": qual,
+                    "kind": kind,
+                    "module": module,
+                    "path": path,
+                    "line": node.lineno,
+                }
+            )
+            if isinstance(node, ast.ClassDef):
+                _collect(node.body, qual + ".", module, path, out)
+
+
+def extract_symbols(files):
+    """List every top-level function/class and class method with its line number."""
+    out = []
+    for path, code in files.items():
+        module = path_to_module(path)
+        if not module:
+            continue
+        try:
+            tree = ast.parse(code)
+        except SyntaxError:
+            continue
+        _collect(tree.body, "", module, path, out)
+    return out
 
 if __name__ == "__main__":
     url = input("GitHub repo URL: ")

@@ -1,4 +1,7 @@
-from impact import direct_dependents, all_dependents, dependency_paths
+from impact import (
+    direct_dependents, all_dependents, dependency_paths,
+    dependents_with_location, direct_import_sites,
+)
 import difflib
 
 def _exists(graph, name):
@@ -43,6 +46,20 @@ def most_depended_on(graph, limit=10):
     rows = graph.query(q, params={"limit": int(limit)}).result_set
     return [{"name": n, "direct_dependents": c} for n, c in rows]
 
+def find_symbol(graph, query, limit=20):
+    """Where is a function, method or class defined? (file + line)"""
+    q = """
+    MATCH (s:Symbol)-[:DEFINED_IN]->(c:Component)
+    WHERE toLower(s.name) CONTAINS toLower($q)
+       OR toLower(s.qualname) CONTAINS toLower($q)
+    RETURN s.qualname, s.kind, s.path, s.line, c.name
+    ORDER BY s.qualname LIMIT $limit
+    """
+    rows = graph.query(q, params={"q": query, "limit": int(limit)}).result_set
+    return [
+        {"symbol": a, "kind": k, "file": p, "line": l, "module": m}
+        for a, k, p, l, m in rows
+    ]
 
 # ---- Tool definitions the LLM will see -------------------------------
 
@@ -53,6 +70,18 @@ TOOL_SPECS = [
         "name": "find_component",
         "description": "Search component names by substring. Use this first when "
                        "the user's wording may not match an exact name.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"query": {"type": "string"}},
+            "required": ["query"],
+        },
+    },
+        {
+        "name": "find_symbol",
+        "description": "Find where a function, method or class is defined: file "
+                       "path, line number and module. Only works on GitHub repo "
+                       "graphs. Use the returned module name with get_all_affected "
+                       "to see what depends on the file.",
         "input_schema": {
             "type": "object",
             "properties": {"query": {"type": "string"}},
@@ -95,6 +124,8 @@ def run_tool(graph, tool_name, args):
     try:
         if tool_name == "find_component":
             return find_component(graph, args["query"])
+        if tool_name == "find_symbol":
+            return find_symbol(graph, args["query"])
         if tool_name == "get_most_depended_on":
             return most_depended_on(graph)
 
@@ -108,13 +139,17 @@ def run_tool(graph, tool_name, args):
         if tool_name == "get_direct_dependents":
             return direct_dependents(name, graph=graph)
         if tool_name == "get_all_affected":
-            rows = all_dependents(name, graph=graph)
-            return {
-                "total": len(rows),
-                "affected": [
-                    {"name": n, "type": t, "hops": h} for n, t, h in rows[:60]
-                ],
-            }
+            rows = dependents_with_location(name, graph=graph)
+            lines = {a: l for a, _, l in direct_import_sites(name, graph=graph)}
+            affected = []
+            for n, t, d, h in rows[:60]:
+                item = {"name": n, "type": t, "hops": h}
+                if d and str(d).endswith(".py"):
+                    item["file"] = d
+                if lines.get(n):
+                    item["imports_it_at_line"] = lines[n]
+                affected.append(item)
+            return {"total": len(rows), "affected": affected}
         if tool_name == "get_dependency_paths":
             return dependency_paths(name, graph=graph, limit=15)
         if tool_name == "get_dependencies_of":

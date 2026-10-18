@@ -29,7 +29,10 @@ Rules:
 - Call several tools at once when you can (for example get_all_affected and
   get_dependency_paths together) to keep the number of steps small.
 - Call find_component only if the user's wording may not match a component name,
-  and at most once."""
+  and at most once.
+- For "where is X defined" questions, use find_symbol and report the file and line.
+- When results include "file" and "imports_it_at_line", show them for each component
+  as file:line, so the user knows where to look."""
 
 def _declarations():
     """Convert our tool specs into Gemini function declarations."""

@@ -1,8 +1,12 @@
 import streamlit as st
 from db import get_graph
-from impact import direct_dependents, all_dependents, dependency_paths
+from impact import (
+    direct_dependents, all_dependents, dependency_paths,
+    direct_import_sites, dependents_with_location,
+)
 from repo_graph import load_repo_graph
 from agent import ask_agent
+from tools import find_symbol
 
 st.set_page_config(page_title="ImpactMap", page_icon="🗺️")
 st.title("ImpactMap")
@@ -71,13 +75,31 @@ if st.button("Analyze impact"):
         c2.metric("Total potentially affected", len(affected))
 
         st.subheader("Affected components")
-        st.dataframe(
-            [
-                {"Component": n, "Type": t, "Distance (hops)": h}
-                for n, t, h in affected
-            ]
-        )
-
+        if mode == "GitHub repo (Python)":
+            lines = {a: l for a, _, l in direct_import_sites(failed, graph=graph)}
+            located = dependents_with_location(failed, graph=graph)
+            st.dataframe(
+                [
+                    {
+                        "Component": n,
+                        "File": d,
+                        "Distance (hops)": h,
+                        "Imports it at line": lines.get(n),
+                    }
+                    for n, t, d, h in located
+                ]
+            )
+            st.caption(
+                "'Imports it at line' is shown for direct dependents: the line in "
+                "that file where it imports the selected module."
+            )
+        else:
+            st.dataframe(
+                [
+                    {"Component": n, "Type": t, "Distance (hops)": h}
+                    for n, t, h in affected
+                ]
+            )
         with st.expander("Dependency paths (up to 100)"):
             st.caption("Read each arrow as 'depends on'.")
             for path in dependency_paths(failed, graph=graph):
@@ -100,12 +122,39 @@ question = st.text_input(
     key="agent_question",
 )
 
+@st.cache_resource
+def _answer_store():
+    return {}
+
+
 if st.button("Ask") and question:
-    with st.spinner("Agent is querying the graph... (free-tier limits may add a short wait)"):
-        answer, trace = ask_agent(question, graph)
+    store = _answer_store()
+    key = (question.strip().lower(), graph_name)
+    if key in store:
+        answer, trace = store[key]
+    else:
+        with st.spinner("Agent is querying the graph..."):
+            answer, trace = ask_agent(question, graph)
+        if answer.startswith("The model call failed"):
+            st.warning(
+                "The free model quota is used up right now. "
+                "The graph analysis above still works without the agent."
+            )
+        else:
+            store[key] = (answer, trace)
 
     st.markdown(answer)
 
-    with st.expander(f"Graph queries the agent ran ({len(trace)})", expanded=True):
+    with st.expander(f"Graph queries the agent ran ({len(trace)})", expanded=False):
         for t in trace:
             st.code(f"{t['tool']}({t['input']})", language="python")
+
+st.divider()
+st.subheader("Find a function or class")
+sym_q = st.text_input("Name (partial match is fine)", key="sym_q")
+if sym_q:
+    found = find_symbol(graph, sym_q, limit=30)
+    if found:
+        st.dataframe(found)
+    else:
+        st.info("No matches. Symbols are only available for loaded GitHub repos.")

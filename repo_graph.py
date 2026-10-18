@@ -1,11 +1,13 @@
 import re
 
 from db import get_db
+
 from repo_loader import (
     parse_repo_url,
     download_repo,
     read_python_files,
     build_dependencies,
+    extract_symbols,
 )
 
 
@@ -46,13 +48,23 @@ def load_repo_graph(url):
     )
     graph.query("CREATE INDEX FOR (c:Component) ON (c.name)")
 
-    pairs = [{"a": a, "b": b} for a, b in sorted(deps)]
+    pairs = [{"a": a, "b": b, "line": deps[(a, b)]} for a, b in sorted(deps)]
     for i in range(0, len(pairs), 500):
         graph.query(
             "UNWIND $pairs AS p "
             "MATCH (a:Component {name: p.a}), (b:Component {name: p.b}) "
-            "CREATE (a)-[:DEPENDS_ON]->(b)",
+            "CREATE (a)-[:DEPENDS_ON {line: p.line}]->(b)",
             params={"pairs": pairs[i : i + 500]},
+        )
+        symbols = extract_symbols(files)
+    graph.query("CREATE INDEX FOR (s:Symbol) ON (s.name)")
+    for i in range(0, len(symbols), 500):
+        graph.query(
+            "UNWIND $rows AS row "
+            "MATCH (c:Component {name: row.module}) "
+            "CREATE (:Symbol {name: row.name, qualname: row.qualname, "
+            "kind: row.kind, path: row.path, line: row.line})-[:DEFINED_IN]->(c)",
+            params={"rows": symbols[i : i + 500]},
         )
 
     return graph, name, len(rows), len(pairs)
