@@ -15,7 +15,7 @@ Two modes:
    class is defined.
 
 **Demo video:** [link]
-**Live demo:** [link, or delete this line]
+**Live demo:** (https://impactmapp.streamlit.app/)
 
 ## Why the graph is essential
 Every fact in the output (what is affected, how far away, through which path,
