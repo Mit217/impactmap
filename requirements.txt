@@ -1,3 +1,5 @@
 falkordb
 streamlit
 python-dotenv
+requests
+google-genai
