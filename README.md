@@ -14,7 +14,8 @@ Two modes:
    the line where it imports the module. It can also find where a function or
    class is defined.
 
-**Demo video:** [link]
+**Demo video:** (https://youtube.com/shorts/rxlp7AykhQE?feature=share)
+
 **Live demo:** (https://impactmapp.streamlit.app/)
 
 ## Why the graph is essential
