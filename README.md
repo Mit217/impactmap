@@ -179,6 +179,7 @@ needs it. To delete old repo graphs from the database: `python cleanup.py`
 ![Sample graph: Auth Service impact](Screenshots/auth.png)
 ![httpx: dependents with file and import line](Screenshots/httpx.png)
 ![Agent answer with graph queries](Screenshots/agent.png)
+![Searching "send" in httpx: each match with its file and definition line.](Screenshots/search.png)
 
 ## AI disclosure
 I used Claude (Anthropic) as a coding assistant for guidance and code drafts. I

@@ -151,6 +151,12 @@ if st.button("Ask") and question:
 
 st.divider()
 st.subheader("Find a function or class")
+st.caption(
+    "Search a loaded GitHub repo for a function, method or class by name "
+    "(partial matches work). Each result shows the file and line where it is "
+    "defined, plus its module. Copy the module name into **Analyze impact** "
+    "above to see which files depend on it. Only available in repo mode."
+)
 sym_q = st.text_input("Name (partial match is fine)", key="sym_q")
 if sym_q:
     found = find_symbol(graph, sym_q, limit=30)
